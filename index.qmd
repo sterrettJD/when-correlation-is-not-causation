@@ -1,0 +1,126 @@
+---
+title: "When correlation is not causation"
+---
+
+People often throw around the statement that "correlation is not causation" in an attempt to discredit or bring caution around decision making using statistical results.
+
+Rarely, though, can people name explicitly the reasons why two correlated variables would not be causally related. Decisions must be made, so an understanding of these reasons is important in order to refute why correlated variables wouldn't be causally related.
+
+I will lay out the reasons below.
+
+
+# 1. Random Chance
+It's all chance... There are no other variables at play - the numbers just happen to line up!
+
+Let's get a grip on how often this happens when we're running some statistical test. We'll simulate two groups of data from the exact same population parameters. Assume there has been some intervention here on group 2, and we're looking for an association between the intervention and each individual's score.
+
+
+```{r}
+simulate_two_groups <- function(n, mean=0, sd=1){
+    x1 <- rnorm(n, mean=mean, sd=sd)
+    x2 <- rnorm(n, mean=mean, sd=sd)
+    return(cbind(x1,x2))
+}
+
+get_t_test_p <- function(data){
+    data <- simulate_two_groups(1000)
+    res <- t.test(data[,1], data[,2])
+    return(res$p.value)
+}
+
+n <- 1000
+simulations <- 1E4
+p_values <- replicate(simulations, 
+                      get_t_test_p(simulate_two_groups(n)))
+```
+
+
+Let's look at how often we get statistically significant relationships, based on the p value being less than alpha (or our statistical significance threshold). 
+
+```{r}
+alpha <- 0.05
+significant_portion <- sum(p_values < alpha)/simulations
+print(paste(significant_portion*100, "percent of tests were significant."))
+
+```
+
+We can see from this histogram of p value results, how many times we find a relationship between these values when there really isn't a causal relationship. Our alpha threshold is labeled with a red line. If we lower our alpha threshold, we will see proportionally fewer false positive associations.
+
+```{r}
+hist(p_values, breaks=100)
+abline(v=0.05, col="red")
+```
+
+
+
+# 2. Counfounding
+
+## Defining confounding
+Confounding is a common reason why two variables may be correlated when one doesn't causally effect the other. Confounding occurs when a third variable causally effects both of the two variables of interest.
+
+## An example
+A classic example is the correlation in beach towns between deaths from drowning and ice cream sales. Ice cream consumption does not cause drowning, but hot days cause both ice cream consumption and more swimming.
+
+## Demonstrating the effects of confounding
+Below, we will simulate simple confounded datasets, where you can see that the strength of the confounding affects the perceived effect of variable X on Y, if we run a simple linear regression of Y ~ X.
+```{r}
+# strength should be between 0 and 1
+simulate_confounded_dataset <- function(n, strength){
+    # How much noise is there?
+    independent_variation <-sqrt(1 - strength)
+    # generate the confounder
+    confounder <- rnorm(n)
+    # x is only effected by the confounder and random variation
+    x <- confounder*sqrt(strength) + rnorm(n)*independent_variation 
+    # y is only effected by the confounder and random variation
+    y <- confounder*sqrt(strength) + rnorm(n)*independent_variation 
+    
+    return(data.frame(confounder=confounder, x=x, y=y))
+}
+
+simulate_and_get_lm_beta <- function(n, strength){
+    data <- simulate_confounded_dataset(n, strength)
+    # run a regression and extract the coefficient
+    mod <- lm(y~x, data=data)
+    return(coef(mod)[2])
+}
+
+confounding_strengths <- seq(0,1,by=0.001) 
+lm_betas <- sapply(confounding_strengths, 
+                    FUN=function(x){
+                        simulate_and_get_lm_beta(n, x)
+                        })
+plot(confounding_strengths, lm_betas,
+     xlab="Confounder strength", ylab="Linear regression coefficient for var X")
+abline(reg=lm(lm_betas ~ confounding_strengths))
+```
+
+## Addressing confounding statistically
+If we have accurately measured confounding, we can control for it statistically. Look at what happens to our regression coefficient when we control for the confounding variable. It goes to zero! (except when the confounding strength is 1, since that's when it's impossible to detangle variables, since they're identical)
+
+```{r}
+simulate_and_get_adjusted_lm_beta <- function(n, strength){
+    data <- simulate_confounded_dataset(n, strength)
+    # run a regression and extract the coefficient
+    mod <- lm(y~x+confounder, data=data)
+    return(coef(mod)[2])
+}
+
+adjusted_lm_betas <- sapply(confounding_strengths, 
+                    FUN=function(x){
+                        simulate_and_get_adjusted_lm_beta(n, x)
+                        })
+plot(confounding_strengths, adjusted_lm_betas,
+     xlab="Confounder strength", ylab="Linear regression coefficient for var X")
+abline(reg=lm(adjusted_lm_betas ~ confounding_strengths))
+```
+
+## Addressing confounding, continued
+It isn't always possible to measure all confounding variables. That's why randomization has become very useful in the life sciences. It effectively allows us to approximately equalize variables that we can't measure across the treatment groups of interest. 
+
+Additionally, there are other techniques to control for unmeasured confounding. For example, if we know there are confounders between individuals, we can look at changes to variables of interest within participants.
+
+# 3. Mediation
+
+
+# 4. Reverse causality
