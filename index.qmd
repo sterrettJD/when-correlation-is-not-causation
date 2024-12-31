@@ -47,11 +47,15 @@ print(paste(significant_portion*100, "percent of tests were significant."))
 We can see from this histogram of p value results, how many times we find a relationship between these values when there really isn't a causal relationship. Our alpha threshold is labeled with a red line. If we lower our alpha threshold, we will see proportionally fewer false positive associations.
 
 ```{r}
-hist(p_values, breaks=100)
-abline(v=0.05, col="red")
+hist(p_values, breaks=100, 
+     main="Histogram of p values under null distribution",
+     xlab="p values")
+abline(v=0.05, col="red", lw=5)
 ```
 
 
+## The takeaway 
+Significant associations when there is no real effect should occur less than 5% of the time, but even that number is a controllable parameter. If you cannot handle a 5% false positive rate, decrease your alpha threshold! Otherwise, consider this acceptable, or rerun your study to confirm the results. 
 
 # 2. Counfounding
 
@@ -124,3 +128,4 @@ Additionally, there are other techniques to control for unmeasured confounding. 
 
 
 # 4. Reverse causality
+
